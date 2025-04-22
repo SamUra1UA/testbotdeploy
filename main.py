@@ -22,14 +22,6 @@ FALLBACK_THREAD_ID = 988
 
 client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 
-async def check_authorized():
-    await client.connect()
-    if not await client.is_user_authorized():
-        print("❌ Не авторизовано. Запусти спочатку authorize_once.py")
-        exit()
-
-client.loop.run_until_complete(check_authorized())
-
 
 @client.on(events.NewMessage(chats=SOURCE_CHAT_ID))
 async def forward_message(event):
