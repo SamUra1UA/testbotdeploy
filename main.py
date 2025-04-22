@@ -1,4 +1,5 @@
 from telethon import TelegramClient, events
+from telethon.tl.types import MessageMediaWebPage
 import asyncio
 import os
 import sys
@@ -39,8 +40,16 @@ async def forward_message(event):
                 destination_thread = THREAD_MAPPING[thread_id]
 
         if destination_thread:
-            # Відправлення медіа або тексту
-            if event.message.media:
+            media = event.message.media
+
+            # Перевірка чи це web page
+            if media and isinstance(media, MessageMediaWebPage):
+                await client.send_message(
+                    DESTINATION_CHAT_ID,
+                    event.message.message,
+                    reply_to=destination_thread
+                )
+            elif media:
                 await client.send_file(
                     DESTINATION_CHAT_ID,
                     file=event.message.media,
