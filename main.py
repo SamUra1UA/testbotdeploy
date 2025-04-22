@@ -1,11 +1,10 @@
 from telethon import TelegramClient, events
-from Keys import YOUR_API_ID, YOUR_API_HASH
 import asyncio
 import os
 import sys
 
-API_ID = os.getenv(YOUR_API_ID)
-API_HASH = os.getenv(YOUR_API_HASH)
+API_ID = os.getenv("YOUR_API_ID")
+API_HASH = os.getenv("YOUR_API_HASH")
 SESSION_NAME = "gingers_session"
 
 SOURCE_CHAT_ID = {-1002300558407, -1002270373322}
