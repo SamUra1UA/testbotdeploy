@@ -1,4 +1,5 @@
-from telethon import TelegramClient, events
+import re
+from telethon import TelegramClient, events, Button
 from telethon.tl.types import MessageMediaWebPage
 import asyncio
 import os
@@ -42,6 +43,17 @@ def save_mapping():
     with open(MESSAGE_MAPPING_FILE, 'w') as f:
         json.dump(MESSAGE_MAPPING, f)
 
+def extract_links(text):
+    """Витягує всі URL з тексту"""
+    if not text:
+        return []
+    url_pattern = r'(https?://[^\s]+)'
+    return re.findall(url_pattern, text)
+
+def generate_link_buttons(links):
+    """Генерує кнопки для посилань"""
+    return [Button.url(f"🔗 Link {i+1}", link) for i, link in enumerate(links)]
+
 client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 
 @client.on(events.NewMessage(chats=SOURCE_CHAT_ID))
@@ -49,17 +61,15 @@ async def forward_message(event):
     try:
         destination_thread = None
 
-        # Якщо це канал без гілок
+        # Канал без гілок
         if event.chat_id == -1002270373322:
             destination_thread = FALLBACK_THREAD_ID
-
-            # Але все одно шукаємо відповідь на старе повідомлення
             if event.message.reply_to:
                 source_reply_id = event.message.reply_to.reply_to_msg_id
                 if source_reply_id in MESSAGE_MAPPING:
                     destination_thread = MESSAGE_MAPPING[source_reply_id]
 
-        # Якщо це канал з гілками
+        # Канали з гілками
         else:
             if event.message.reply_to:
                 source_reply_id = event.message.reply_to.reply_to_msg_id
@@ -68,47 +78,44 @@ async def forward_message(event):
                 elif source_reply_id in MESSAGE_MAPPING:
                     destination_thread = MESSAGE_MAPPING[source_reply_id]
 
-        if destination_thread:
-            media = event.message.media
-            buttons = event.message.buttons
-
-            sent_message = None
-
-            # Перевірка чи це web page
-            if media and isinstance(media, MessageMediaWebPage):
-                sent_message = await client.send_message(
-                    DESTINATION_CHAT_ID,
-                    event.message.message,
-                    reply_to=destination_thread,
-                    buttons=buttons
-                )
-            elif media:
-                sent_message = await client.send_file(
-                    DESTINATION_CHAT_ID,
-                    file=event.message.media,
-                    caption=event.message.message,
-                    reply_to=destination_thread,
-                    buttons=buttons
-                )
-            else:
-                sent_message = await client.send_message(
-                    DESTINATION_CHAT_ID,
-                    event.message.message,
-                    reply_to=destination_thread,
-                    buttons=buttons
-                )
-
-            # Зберігаємо відповідність source id -> destination id
-            MESSAGE_MAPPING[event.message.id] = sent_message.id
-            save_mapping()
-
-            print(f"✅ Переслано {event.message.id} ➔ {sent_message.id} у гілку {destination_thread}")
-        else:
+        if not destination_thread:
             print("⚠️ Повідомлення пропущене: немає відповідної гілки.")
+            return
+
+        media = event.message.media
+        text = event.message.message or ""
+        original_buttons = event.message.buttons or []
+        links = extract_links(text)
+        link_buttons = generate_link_buttons(links)
+        combined_buttons = original_buttons + [[btn] for btn in link_buttons] if link_buttons else original_buttons
+
+        sent_message = None
+
+        if media:
+            sent_message = await client.send_file(
+                DESTINATION_CHAT_ID,
+                file=media,
+                caption=text,
+                reply_to=destination_thread,
+                buttons=combined_buttons
+            )
+        else:
+            sent_message = await client.send_message(
+                DESTINATION_CHAT_ID,
+                text,
+                reply_to=destination_thread,
+                buttons=combined_buttons
+            )
+
+        # Зберігаємо відповідність ID
+        MESSAGE_MAPPING[event.message.id] = sent_message.id
+        save_mapping()
+
+        print(f"✅ Переслано {event.message.id} ➔ {sent_message.id} у гілку {destination_thread}")
 
     except Exception as e:
         print(f"❌ Помилка при обробці повідомлення: {e}")
-        await asyncio.sleep(2)  # Затримка для зниження навантаження
+        await asyncio.sleep(2)
 
 async def main():
     print("🚀 Бот запущено...")
@@ -119,8 +126,6 @@ async def main():
             print(f"❗ Помилка при підключенні: {e}")
             print("🔁 Перепідключення через 1 секунду...")
             await asyncio.sleep(1)
-
-            # Перезапуск скрипта
             print("🔄 Перезапуск скрипта...")
             os.execv(sys.executable, ['python'] + sys.argv)
 
