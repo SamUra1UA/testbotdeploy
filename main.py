@@ -1,6 +1,6 @@
 import re
 from telethon import TelegramClient, events, Button
-from telethon.tl.types import MessageMediaWebPage
+from telethon.tl.types import MessageMediaPhoto, MessageMediaDocument
 import asyncio
 import os
 import sys
@@ -107,7 +107,7 @@ async def forward_message(event):
 
         sent_message = None
 
-        if media:
+        if isinstance(media, (MessageMediaPhoto, MessageMediaDocument)):
             sent_message = await client.send_file(
                 DESTINATION_CHAT_ID,
                 file=media,
